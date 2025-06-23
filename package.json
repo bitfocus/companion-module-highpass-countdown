@@ -1,0 +1,43 @@
+{
+	"name": "companion-module-highpass-countdown",
+	"version": "1.0.0",
+	"type": "module",
+	"main": "src/index.js",
+	"scripts": {
+		"build": "yarn companion-module-build",
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"files": [
+		"src",
+		"public",
+		"LICENSE",
+		"README.md",
+		"icon.png"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bitfocus/companion-module-highpass-countdown.git"
+	},
+	"dependencies": {
+		"@companion-module/base": "^1.12.0",
+		"express": "^4.18.2",
+		"socket.io": "^4.7.2"
+	},
+	"devDependencies": {
+		"eslint": "^8.47.0",
+		"prettier": "^3.0.2",
+		"@companion-module/tools": "2.3.0"
+	},
+	"prettier": {
+		"semi": false,
+		"singleQuote": true,
+		"tabWidth": 2,
+		"useTabs": true
+	},
+	"companion": {
+		"buildDir": "dist"
+	}
+} 
