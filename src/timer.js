@@ -16,6 +16,7 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	async init(config) {
+		this.log('debug', 'init')
 		this.updateStatus(InstanceStatus.Ok)
 		await this.configUpdated(config)
 
@@ -33,6 +34,7 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	async destroy() {
+		this.log('debug', 'destroy')
 		if (this.timer_interval) {
 			clearInterval(this.timer_interval)
 			this.timer_interval = null
@@ -262,16 +264,12 @@ export class CountdownTimer extends InstanceBase {
 					}
 
 					if (this.timer_state === 'running') {
-						style.bgcolor = combineRgb(0, 204, 0) // Green
-
-						if (this.config.red_time && this.timer_remaining > 0 && this.timer_remaining <= this.config.red_time) {
+						if (this.timer_remaining <= 0 || (this.config.red_time && this.timer_remaining <= this.config.red_time)) {
 							style.bgcolor = combineRgb(204, 0, 0) // Red
-						} else if (
-							this.config.amber_time &&
-							this.timer_remaining > 0 &&
-							this.timer_remaining <= this.config.amber_time
-						) {
+						} else if (this.config.amber_time && this.timer_remaining <= this.config.amber_time) {
 							style.bgcolor = combineRgb(255, 128, 0) // Amber
+						} else {
+							style.bgcolor = combineRgb(0, 204, 0) // Green
 						}
 					} else if (this.timer_state === 'paused') {
 						style.bgcolor = combineRgb(255, 128, 0) // Amber
@@ -536,6 +534,7 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	set_timer(seconds) {
+		this.log('debug', `set_timer: ${seconds}s`)
 		if (this.timer_interval) {
 			clearInterval(this.timer_interval)
 			this.timer_interval = null
@@ -549,19 +548,23 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	start_timer() {
+		this.log('debug', `start_timer. state: ${this.timer_state}, interval: ${this.timer_interval}`)
 		if (this.timer_state !== 'running') {
 			this.timer_state = 'running'
 			this.timer_interval = setInterval(() => this.tick(), 1000)
+			this.log('debug', `start_timer: new interval ${this.timer_interval}`)
 			this.broadcastState()
 			this.checkFeedbacks('state_color')
 		}
 	}
 
 	pause_timer() {
+		this.log('debug', `pause_timer. state: ${this.timer_state}, interval: ${this.timer_interval}`)
 		if (this.timer_state === 'running') {
 			this.timer_state = 'paused'
 			if (this.timer_interval) {
 				clearInterval(this.timer_interval)
+				this.log('debug', `pause_timer: cleared interval ${this.timer_interval}`)
 				this.timer_interval = null
 			}
 			this.broadcastState()
@@ -570,9 +573,11 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	stop_timer() {
+		this.log('debug', `stop_timer. state: ${this.timer_state}, interval: ${this.timer_interval}`)
 		this.timer_state = 'stopped'
 		if (this.timer_interval) {
 			clearInterval(this.timer_interval)
+			this.log('debug', `stop_timer: cleared interval ${this.timer_interval}`)
 			this.timer_interval = null
 		}
 		this.timer_remaining = this.last_set_time
@@ -583,13 +588,8 @@ export class CountdownTimer extends InstanceBase {
 
 	tick() {
 		if (this.timer_state === 'running') {
-			if (this.timer_remaining > 0) {
-				this.timer_remaining--
-			} else {
-				// Blinking and counting up with a minus is a display concern.
-				// The core logic will just go into negative.
-				this.timer_remaining--
-			}
+			this.timer_remaining--
+
 			this.update_variables()
 			this.checkFeedbacks('state_color')
 			this.broadcastState()
