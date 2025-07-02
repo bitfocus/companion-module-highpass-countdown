@@ -536,6 +536,10 @@ export class CountdownTimer extends InstanceBase {
 	}
 
 	set_timer(seconds) {
+		if (this.timer_interval) {
+			clearInterval(this.timer_interval)
+			this.timer_interval = null
+		}
 		this.timer_remaining = seconds
 		this.last_set_time = seconds
 		this.timer_state = 'stopped'
