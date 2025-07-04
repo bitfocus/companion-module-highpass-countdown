@@ -63,7 +63,7 @@ export class CountdownTimer extends InstanceBase {
 				id: 'port',
 				label: 'Web Server Port',
 				width: 6,
-				default: '8080',
+				default: '8880',
 			},
 			{
 				type: 'checkbox',

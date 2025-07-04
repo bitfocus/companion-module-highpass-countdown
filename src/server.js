@@ -36,7 +36,7 @@ export function setupWebServer(instance) {
 		instance.broadcastState()
 	})
 
-	const port = instance.config.port || 8080
+	const port = instance.config.port || 8880
 	server.listen(port, () => {
 		instance.log('info', `Web server started on port ${port}`)
 	})
