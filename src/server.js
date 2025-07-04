@@ -17,18 +17,11 @@ export function setupWebServer(instance) {
 		},
 	})
 
-	const isDev = __dirname.endsWith('src')
+	// Serve static files from the package root directory
+	// The build process copies all files from public/ to the root
+	app.use(express.static(process.cwd()))
 
-	if (isDev) {
-		// In development, serve the public folder and socket.io from node_modules
-		app.use(express.static(path.join(__dirname, '../public')))
-		app.get('/socket.io.min.js', (req, res) => {
-			res.sendFile(path.join(__dirname, '../node_modules/socket.io/client-dist/socket.io.min.js'))
-		})
-	} else {
-		// In production, all files are in the same directory
-		app.use(express.static(__dirname))
-	}
+	instance.log('info', `Web server serving static files from: ${process.cwd()}`)
 
 	io.on('connection', (socket) => {
 		instance.log('debug', 'Client connected to web server')
