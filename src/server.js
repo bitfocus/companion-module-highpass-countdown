@@ -37,8 +37,11 @@ export function setupWebServer(instance) {
 	})
 
 	const port = instance.config.port || 8880
-	server.listen(port, () => {
-		instance.log('info', `Web server started on port ${port}`)
+	const host = '0.0.0.0' // Explicitly bind to all network interfaces
+	
+	server.listen(port, host, () => {
+		instance.log('info', `Web server started on ${host}:${port}`)
+		instance.log('info', `Access the timer from other devices at: http://<your-ip>:${port}`)
 	})
 
 	return {
