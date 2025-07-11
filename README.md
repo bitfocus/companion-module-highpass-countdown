@@ -14,7 +14,7 @@ This module provides a simple countdown timer that can be displayed in a web bro
 
 ## Configuration
 
-1.  **Web Server Port**: The port on which the web server will run (default: 8880).
+1.  **Web Server Port**: The port on which the web server will run (default: 8080).
 2.  **Show Internal Time**: Display the computer's internal time on the web page.
 3.  **Time Corner**: Choose the corner of the screen to display the internal time.
 4.  **Amber Time (seconds)**: The timer will turn amber when the remaining time is less than or equal to this value.
