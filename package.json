@@ -1,6 +1,7 @@
 {
 	"name": "highpass-countdown",
 	"version": "1.0.6",
+	"license": "MIT",
 	"type": "module",
 	"main": "src/index.js",
 	"scripts": {
@@ -16,13 +17,14 @@
 		"README.md",
 		"icon.png"
 	],
-	"license": "MIT",
+
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/bitfocus/companion-module-highpass-countdown.git"
 	},
 	"dependencies": {
 		"@companion-module/base": "^1.12.0",
+		"companion-module-utils": "^0.4.0",
 		"express": "^4.18.2",
 		"socket.io": "^4.7.2"
 	},
