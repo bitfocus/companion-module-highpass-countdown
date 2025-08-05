@@ -1,6 +1,8 @@
 import express from 'express'
 import http from 'http'
 import { Server } from 'socket.io'
+import fs from 'fs'
+import path from 'path'
 
 export function setupWebServer(instance) {
 	const app = express()
@@ -11,11 +13,28 @@ export function setupWebServer(instance) {
 		},
 	})
 
-	// Serve static files from the package root directory
-	// The build process copies all files from public/ to the root
-	app.use(express.static(process.cwd()))
+	// Find the module directory - in production, files are in the same directory as main.js
+	// In development, they're in the public/ directory relative to src/
+	let staticDir = process.cwd()
+	
+	// Try to detect if we're in a packaged module by checking for main.js
+	try {
+		// Check if main.js exists in current directory (production)
+		if (fs.existsSync(path.join(process.cwd(), 'main.js'))) {
+			staticDir = process.cwd()
+			instance.log('info', 'Detected production environment - serving from module root')
+		} else {
+			// Development mode - serve from public directory
+			staticDir = path.join(process.cwd(), 'public')
+			instance.log('info', 'Detected development environment - serving from public/')
+		}
+	} catch (error) {
+		instance.log('warn', `Error detecting environment: ${error.message}`)
+		staticDir = process.cwd()
+	}
 
-	instance.log('info', `Web server serving static files from: ${process.cwd()}`)
+	app.use(express.static(staticDir))
+	instance.log('info', `Web server serving static files from: ${staticDir}`)
 
 	io.on('connection', (socket) => {
 		instance.log('debug', 'Client connected to web server')

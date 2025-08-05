@@ -24,8 +24,10 @@ export class CountdownTimer extends InstanceBase {
 		this.timer_remaining = 0
 		this.last_set_time = 0
 		this.timer_interval = null
+		this.speech_interval = null
 		this.top_aux_text = ''
 		this.bottom_aux_text = ''
+		this.middle_aux_text = ''
 
 		this.init_actions()
 		this.init_feedbacks()
@@ -39,6 +41,10 @@ export class CountdownTimer extends InstanceBase {
 			clearInterval(this.timer_interval)
 			this.timer_interval = null
 		}
+		if (this.speech_interval) {
+			clearInterval(this.speech_interval)
+			this.speech_interval = null
+		}
 		if (this.server) {
 			this.server.close()
 		}
@@ -47,6 +53,10 @@ export class CountdownTimer extends InstanceBase {
 
 	async configUpdated(config) {
 		this.config = config
+		
+		// Handle continuous speech changes
+		this.updateContinuousSpeech()
+		
 		if (this.server) {
 			this.server.close(() => {
 				this.init_webserver()
@@ -75,6 +85,7 @@ export class CountdownTimer extends InstanceBase {
 				type: 'dropdown',
 				id: 'time_corner',
 				label: 'Time Corner',
+				width: 12,
 				default: 'top-left',
 				choices: [
 					{ id: 'top-left', label: 'Top Left' },
@@ -82,6 +93,12 @@ export class CountdownTimer extends InstanceBase {
 					{ id: 'bottom-left', label: 'Bottom Left' },
 					{ id: 'bottom-right', label: 'Bottom Right' },
 				],
+			},
+			{
+				type: 'checkbox',
+				id: 'hide_timer',
+				label: 'Hide Timer (Show Third Aux Field Instead)',
+				default: false,
 			},
 			{
 				type: 'number',
@@ -118,6 +135,91 @@ export class CountdownTimer extends InstanceBase {
 				default: 5,
 				min: 1,
 				max: 50,
+			},
+			{
+				type: 'static-text',
+				id: 'speech_section',
+				label: 'Speech Synthesis Settings',
+				width: 12,
+				value: '',
+			},
+			{
+				type: 'checkbox',
+				id: 'enable_speech',
+				label: 'Enable Speech Synthesis',
+				default: false,
+			},
+			{
+				type: 'dropdown',
+				id: 'speech_field',
+				label: 'Field to Read Aloud',
+				width: 12,
+				default: 'timer',
+				choices: [
+					{ id: 'timer', label: 'Timer' },
+					{ id: 'top_aux', label: 'Top Aux Text' },
+					{ id: 'bottom_aux', label: 'Bottom Aux Text' },
+					{ id: 'middle_aux', label: 'Middle Aux Text' },
+				],
+				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'dropdown',
+				id: 'speech_trigger',
+				label: 'Speech Trigger',
+				width: 12,
+				default: 'manual',
+				choices: [
+					{ id: 'manual', label: 'Manual (Click to Speak)' },
+					{ id: 'timer_start', label: 'When Timer Starts' },
+					{ id: 'timer_end', label: 'When Timer Ends' },
+					{ id: 'timer_warning', label: 'At Warning Times' },
+					{ id: 'continuous', label: 'Continuous (Repeat)' },
+				],
+				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'number',
+				id: 'speech_interval',
+				label: 'Continuous Speech Interval (seconds)',
+				width: 12,
+				default: 5,
+				min: 1,
+				max: 60,
+				isVisible: (options) => options.enable_speech === true && options.speech_trigger === 'continuous',
+			},
+			{
+				type: 'number',
+				id: 'speech_rate',
+				label: 'Speech Rate',
+				width: 4,
+				default: 1,
+				min: 0.1,
+				max: 3,
+				step: 0.1,
+				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'number',
+				id: 'speech_pitch',
+				label: 'Speech Pitch',
+				width: 4,
+				default: 1,
+				min: 0,
+				max: 2,
+				step: 0.1,
+				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'number',
+				id: 'speech_volume',
+				label: 'Speech Volume',
+				width: 4,
+				default: 1,
+				min: 0,
+				max: 1,
+				step: 0.1,
+				isVisible: (options) => options.enable_speech === true,
 			},
 		]
 	}
@@ -245,6 +347,56 @@ export class CountdownTimer extends InstanceBase {
 					const text = await this.parseVariablesInString(action.options.text)
 					this.bottom_aux_text = text
 					this.broadcastState()
+				},
+			},
+			set_middle_aux: {
+				name: 'Set Middle Aux Text',
+				options: [
+					{
+						type: 'textinput',
+						id: 'text',
+						label: 'Text',
+						default: '',
+						useVariables: true,
+					},
+				],
+				callback: async (action) => {
+					const text = await this.parseVariablesInString(action.options.text)
+					this.middle_aux_text = text
+					this.broadcastState()
+				},
+			},
+			speak_text: {
+				name: 'Speak Text',
+				options: [
+					{
+						type: 'dropdown',
+						id: 'field',
+						label: 'Field to Speak',
+						default: 'timer',
+						choices: [
+							{ id: 'timer', label: 'Timer' },
+							{ id: 'top_aux', label: 'Top Aux Text' },
+							{ id: 'bottom_aux', label: 'Bottom Aux Text' },
+							{ id: 'middle_aux', label: 'Middle Aux Text' },
+							{ id: 'custom', label: 'Custom Text' },
+						],
+					},
+					{
+						type: 'textinput',
+						id: 'custom_text',
+						label: 'Custom Text',
+						default: '',
+						useVariables: true,
+						isVisible: (options) => options.field === 'custom',
+					},
+				],
+				callback: async (action) => {
+					// This will be handled by the web interface
+					this.io?.emit('speak_request', {
+						field: action.options.field,
+						custom_text: action.options.field === 'custom' ? await this.parseVariablesInString(action.options.custom_text) : null,
+					})
 				},
 			},
 		})
@@ -476,6 +628,7 @@ export class CountdownTimer extends InstanceBase {
 			{ variableId: 'timer_s', name: 'Timer (seconds)' },
 			{ variableId: 'top_aux_text', name: 'Top Aux Text' },
 			{ variableId: 'bottom_aux_text', name: 'Bottom Aux Text' },
+			{ variableId: 'middle_aux_text', name: 'Middle Aux Text' },
 		]
 		this.setVariableDefinitions(variables)
 		this.update_variables()
@@ -486,6 +639,9 @@ export class CountdownTimer extends InstanceBase {
 			const { server, io } = setupWebServer(this)
 			this.server = server
 			this.io = io
+			
+			// Initialize continuous speech after server is ready
+			this.updateContinuousSpeech()
 		}
 	}
 
@@ -495,6 +651,7 @@ export class CountdownTimer extends InstanceBase {
 			state: this.timer_state,
 			top_aux: this.top_aux_text,
 			bottom_aux: this.bottom_aux_text,
+			middle_aux: this.middle_aux_text,
 			config: {
 				amber: this.config.amber_time,
 				red: this.config.red_time,
@@ -502,6 +659,14 @@ export class CountdownTimer extends InstanceBase {
 				time_corner: this.config.time_corner,
 				timer_fontsize: this.config.timer_fontsize,
 				aux_fontsize: this.config.aux_fontsize,
+				hide_timer: this.config.hide_timer,
+				enable_speech: this.config.enable_speech,
+				speech_field: this.config.speech_field,
+				speech_trigger: this.config.speech_trigger,
+				speech_rate: this.config.speech_rate,
+				speech_pitch: this.config.speech_pitch,
+				speech_volume: this.config.speech_volume,
+				speech_interval: this.config.speech_interval,
 			},
 		}
 	}
@@ -509,6 +674,31 @@ export class CountdownTimer extends InstanceBase {
 	broadcastState() {
 		if (this.io) {
 			this.io.emit('state', this.getFullState())
+		}
+	}
+
+	triggerSpeech(event) {
+		if (!this.config.enable_speech || !this.io) return
+		
+		if (this.config.speech_trigger === event) {
+			this.io.emit('trigger_speech', { event })
+		}
+	}
+
+	updateContinuousSpeech() {
+		// Stop any existing continuous speech
+		if (this.speech_interval) {
+			clearInterval(this.speech_interval)
+			this.speech_interval = null
+		}
+
+		// Start continuous speech if enabled
+		if (this.config.enable_speech && this.config.speech_trigger === 'continuous' && this.io) {
+			const interval = (this.config.speech_interval || 5) * 1000 // Convert to milliseconds
+			this.speech_interval = setInterval(() => {
+				this.io.emit('trigger_speech', { event: 'continuous' })
+			}, interval)
+			this.log('debug', `Started continuous speech with ${interval/1000}s interval`)
 		}
 	}
 
@@ -530,6 +720,7 @@ export class CountdownTimer extends InstanceBase {
 			timer_s: this.timer_remaining.toString(),
 			top_aux_text: this.top_aux_text,
 			bottom_aux_text: this.bottom_aux_text,
+			middle_aux_text: this.middle_aux_text,
 		})
 	}
 
@@ -555,6 +746,7 @@ export class CountdownTimer extends InstanceBase {
 			this.log('debug', `start_timer: new interval ${this.timer_interval}`)
 			this.broadcastState()
 			this.checkFeedbacks('state_color')
+			this.triggerSpeech('timer_start')
 		}
 	}
 
@@ -588,7 +780,18 @@ export class CountdownTimer extends InstanceBase {
 
 	tick() {
 		if (this.timer_state === 'running') {
+			const previousRemaining = this.timer_remaining
 			this.timer_remaining--
+
+			// Check for speech triggers
+			if (this.timer_remaining <= 0 && previousRemaining > 0) {
+				this.triggerSpeech('timer_end')
+			} else if (this.config.enable_speech && this.config.speech_trigger === 'timer_warning') {
+				if ((this.config.red_time && this.timer_remaining === this.config.red_time) ||
+					(this.config.amber_time && this.timer_remaining === this.config.amber_time)) {
+					this.triggerSpeech('timer_warning')
+				}
+			}
 
 			this.update_variables()
 			this.checkFeedbacks('state_color')

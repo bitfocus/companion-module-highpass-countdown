@@ -67,4 +67,72 @@ body {
 	0% { opacity: 1; }
 	50% { opacity: 0; }
 	100% { opacity: 1; }
+}
+
+/* Middle aux field styling */
+#middle-aux {
+	display: none; /* Hidden by default */
+}
+
+/* Speech controls */
+#speech-controls {
+	position: absolute;
+	top: 20px;
+	right: 20px;
+	z-index: 100;
+}
+
+.speech-button {
+	background: rgba(255, 255, 255, 0.2);
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	color: white;
+	font-size: 2em;
+	padding: 10px 15px;
+	border-radius: 50%;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	backdrop-filter: blur(10px);
+}
+
+.speech-button:hover {
+	background: rgba(255, 255, 255, 0.3);
+	border-color: rgba(255, 255, 255, 0.5);
+	transform: scale(1.1);
+}
+
+.speech-button:active {
+	transform: scale(0.95);
+}
+
+.speech-button.speaking {
+	background: rgba(76, 175, 80, 0.8);
+	border-color: rgba(76, 175, 80, 1);
+	animation: pulse 1s infinite;
+}
+
+.speech-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+@keyframes pulse {
+	0% { transform: scale(1); }
+	50% { transform: scale(1.05); }
+	100% { transform: scale(1); }
+}
+
+/* Hide timer when middle aux is enabled */
+.timer-hidden #timer {
+	display: none;
+}
+
+.timer-hidden #middle-aux {
+	display: block;
+	font-size: 15vw;
+	font-weight: bold;
+}
+
+/* Hide speech controls when speech is disabled */
+.speech-disabled #speech-controls {
+	display: none;
 } 

@@ -10,11 +10,15 @@
 </head>
 <body>
 	<div id="timer-container">
-		<div id="top-aux"></div>
+		<div id="top-aux" class="aux-text"></div>
 		<div id="timer" class="timer">00:00:00</div>
+		<div id="middle-aux" class="aux-text middle-aux"></div>
 		<div id="bottom-aux" class="aux-text"></div>
 	</div>
 	<div id="internal-time" class="corner"></div>
+	<div id="speech-controls">
+		<button id="speak-button" class="speech-button" title="Click to speak">🔊</button>
+	</div>
 
 	<script src="socket.io.min.js"></script>
 	<script src="script.js"></script>
