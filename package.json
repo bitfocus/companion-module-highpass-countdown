@@ -1,6 +1,6 @@
 {
 	"name": "highpass-countdown",
-	"version": "1.1.0",
+	"version": "2.0.0",
 	"license": "MIT",
 	"type": "module",
 	"main": "src/index.js",
@@ -23,9 +23,7 @@
 	},
 	"dependencies": {
 		"@companion-module/base": "^1.12.0",
-		"companion-module-utils": "^0.4.0",
-		"express": "^4.18.2",
-		"socket.io": "^4.7.2"
+		"companion-module-utils": "^0.4.0"
 	},
 	"devDependencies": {
 		"eslint": "^8.47.0",

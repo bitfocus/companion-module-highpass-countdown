@@ -4,10 +4,9 @@ import {
 	runEntrypoint,
 	combineRgb,
 } from '@companion-module/base'
-import { setupWebServer } from './server.js'
-import http from 'http'
-import { Server } from 'socket.io'
-
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 
 export class CountdownTimer extends InstanceBase {
 	
@@ -24,7 +23,6 @@ export class CountdownTimer extends InstanceBase {
 		this.timer_remaining = 0
 		this.last_set_time = 0
 		this.timer_interval = null
-		this.speech_interval = null
 		this.top_aux_text = ''
 		this.bottom_aux_text = ''
 		this.middle_aux_text = ''
@@ -41,39 +39,461 @@ export class CountdownTimer extends InstanceBase {
 			clearInterval(this.timer_interval)
 			this.timer_interval = null
 		}
-		if (this.speech_interval) {
-			clearInterval(this.speech_interval)
-			this.speech_interval = null
-		}
-		if (this.server) {
-			this.server.close()
-		}
 		this.log('debug', 'destroy')
 	}
 
 	async configUpdated(config) {
 		this.config = config
+	}
+
+	// HTTP Handler for Companion's built-in web server
+	handleHttpRequest(request) {
+		// Extract the filename from the path (e.g., "/instance/countdown/Rewir-Light.ttf" -> "Rewir-Light.ttf")
+		const pathParts = request.path.split('/').filter(part => part.length > 0)
+		const filename = pathParts[pathParts.length - 1] || ''
+		const endpoint = filename.toLowerCase()
 		
-		// Handle continuous speech changes
-		this.updateContinuousSpeech()
-		
-		if (this.server) {
-			this.server.close(() => {
-				this.init_webserver()
-			})
-		} else {
-			this.init_webserver()
+		this.log('debug', `HTTP request: path="${request.path}", filename="${filename}", endpoint="${endpoint}"`)
+
+		// API endpoints
+		if (request.method === 'GET') {
+			// State endpoint - returns current timer state as JSON
+			if (endpoint === 'state') {
+				return {
+					status: 200,
+					body: JSON.stringify(this.getFullState()),
+					headers: {
+						'Content-Type': 'application/json',
+						'Cache-Control': 'no-cache',
+					},
+				}
+			}
+
+			// Config endpoint - returns current configuration as JSON
+			if (endpoint === 'config') {
+				return {
+					status: 200,
+					body: JSON.stringify(this.config),
+					headers: {
+						'Content-Type': 'application/json',
+						'Cache-Control': 'no-cache',
+					},
+				}
+			}
+
+			// Voices endpoint - returns available speech voices
+			if (endpoint === 'voices') {
+				// This will be handled by the web interface
+				return {
+					status: 200,
+					body: JSON.stringify({ message: 'Voices available via web interface' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Control endpoint - handles timer control via GET parameters
+			if (endpoint === 'control') {
+				const action = request.query.action
+				if (action === 'start') {
+					this.start_timer()
+				} else if (action === 'pause') {
+					this.pause_timer()
+				} else if (action === 'stop') {
+					this.stop_timer()
+				}
+				return {
+					status: 200,
+					body: JSON.stringify({ success: true, action }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Set timer endpoint
+			if (endpoint === 'set') {
+				const time = request.query.time
+				if (time) {
+					const parts = time.split(':').map(Number)
+					if (parts.length === 3) {
+						const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+						this.set_timer(seconds)
+						return {
+							status: 200,
+							body: JSON.stringify({ success: true, time: seconds }),
+							headers: {
+								'Content-Type': 'application/json',
+							},
+						}
+					}
+				}
+				return {
+					status: 400,
+					body: JSON.stringify({ error: 'Invalid time format. Use HH:MM:SS' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Add/Subtract time endpoints
+			if (endpoint === 'add' || endpoint === 'subtract') {
+				const time = request.query.time
+				if (time) {
+					const parts = time.split(':').map(Number)
+					if (parts.length === 3) {
+						const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+						if (endpoint === 'add') {
+							this.timer_remaining += seconds
+						} else {
+							this.timer_remaining -= seconds
+						}
+						this.update_variables()
+						return {
+							status: 200,
+							body: JSON.stringify({ success: true, action: endpoint, time: seconds }),
+							headers: {
+								'Content-Type': 'application/json',
+							},
+						}
+					}
+				}
+				return {
+					status: 400,
+					body: JSON.stringify({ error: 'Invalid time format. Use HH:MM:SS' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Set aux text endpoints
+			if (endpoint === 'setaux') {
+				const field = request.query.field
+				const text = request.query.text || ''
+				
+				if (field === 'top') {
+					this.top_aux_text = text
+				} else if (field === 'bottom') {
+					this.bottom_aux_text = text
+				} else if (field === 'middle') {
+					this.middle_aux_text = text
+				} else {
+					return {
+						status: 400,
+						body: JSON.stringify({ error: 'Invalid field. Use top, bottom, or middle' }),
+						headers: {
+							'Content-Type': 'application/json',
+						},
+					}
+				}
+				
+				return {
+					status: 200,
+					body: JSON.stringify({ success: true, field, text }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Speak endpoint
+			if (endpoint === 'speak') {
+				const field = request.query.field
+				const custom_text = request.query.custom_text
+				
+				// Store speech request for the web interface to pick up
+				this.pending_speech_request = {
+					field: field || 'timer',
+					custom_text: custom_text || null,
+					timestamp: Date.now()
+				}
+				
+				return {
+					status: 200,
+					body: JSON.stringify({ success: true, action: 'speak' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Clear speech request endpoint
+			if (endpoint === 'clear_speech_request') {
+				this.pending_speech_request = null
+				return {
+					status: 200,
+					body: JSON.stringify({ success: true, action: 'clear_speech_request' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+
+			// Serve static files
+			if (endpoint === '' || endpoint === 'index.html') {
+				return this.serveStaticFile('index.html', 'text/html')
+			}
+
+			// Serve other static files
+			const staticFiles = ['script.js', 'style.css', 'favicon.ico', 'icon.png', 'rewir-light.ttf']
+			if (staticFiles.includes(endpoint)) {
+				this.log('debug', `Static file requested: ${filename}`)
+				const contentType = this.getContentType(filename)
+				return this.serveStaticFile(filename, contentType)
+			}
+
+			// Socket.IO client (if needed for compatibility)
+			if (endpoint.startsWith('socket.io/')) {
+				return {
+					status: 404,
+					body: JSON.stringify({ error: 'WebSocket connections not supported in HTTP handler mode' }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
 		}
+
+		// POST endpoints for more complex operations
+		if (request.method === 'POST') {
+			if (endpoint === 'control') {
+				try {
+					const body = JSON.parse(request.body || '{}')
+					const action = body.action
+					
+					if (action === 'start') {
+						this.start_timer()
+					} else if (action === 'pause') {
+						this.pause_timer()
+					} else if (action === 'stop') {
+						this.stop_timer()
+					} else if (action === 'set') {
+						const time = body.time
+						if (time) {
+							const parts = time.split(':').map(Number)
+							if (parts.length === 3) {
+								const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+								this.set_timer(seconds)
+							}
+						}
+					}
+					
+					return {
+						status: 200,
+						body: JSON.stringify({ success: true, action }),
+						headers: {
+							'Content-Type': 'application/json',
+						},
+					}
+				} catch (error) {
+					return {
+						status: 400,
+						body: JSON.stringify({ error: 'Invalid JSON body' }),
+						headers: {
+							'Content-Type': 'application/json',
+						},
+					}
+				}
+			}
+		}
+
+		// Default 404 response
+		return {
+			status: 404,
+			body: JSON.stringify({ 
+				status: 404, 
+				error: `API endpoint ${endpoint} for connection ${this.label} not found`,
+				available_endpoints: [
+					'GET /state - Get current timer state',
+					'GET /config - Get current configuration',
+					'GET /control?action=start|pause|stop - Control timer',
+					'GET /set?time=HH:MM:SS - Set timer',
+					'GET /add?time=HH:MM:SS - Add time',
+					'GET /subtract?time=HH:MM:SS - Subtract time',
+					'GET /setaux?field=top|bottom|middle&text=... - Set aux text',
+					'GET /speak?field=timer|top_aux|bottom_aux|middle_aux|custom&custom_text=... - Trigger speech',
+					'GET /clear_speech_request - Clear pending speech request',
+					'GET / - Web interface'
+				]
+			}),
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		}
+	}
+
+	serveStaticFile(filename, contentType) {
+		// Find the module directory - in production, files are in the same directory as main.js
+		// In development, they're in the public/ directory relative to src/
+		let staticDir = process.cwd()
+		
+		// Try to detect if we're in a packaged module by checking for main.js
+		try {
+			// Check if main.js exists in current directory (production)
+			if (fs.existsSync(path.join(process.cwd(), 'main.js'))) {
+				staticDir = process.cwd()
+				this.log('debug', 'Detected production environment - serving from module root')
+			} else {
+				// Development mode - serve from public directory
+				staticDir = path.join(process.cwd(), 'public')
+				this.log('debug', 'Detected development environment - serving from public/')
+			}
+		} catch (error) {
+			this.log('warn', `Error detecting environment: ${error.message}`)
+			staticDir = process.cwd()
+		}
+		
+		this.log('debug', `Static directory: ${staticDir}`)
+
+		// Special handling for font files - try multiple locations
+		if (filename === 'Rewir-Light.ttf') {
+			this.log('debug', `Looking for font file: ${filename}`)
+			this.log('debug', `Static dir: ${staticDir}`)
+			this.log('debug', `Current working directory: ${process.cwd()}`)
+			
+			const possiblePaths = [
+				path.join(staticDir, filename),
+				path.join(staticDir, 'public', filename),
+				path.join(process.cwd(), 'public', filename),
+				path.join(process.cwd(), filename)
+			]
+			
+			this.log('debug', `Checking paths: ${possiblePaths.join(', ')}`)
+			
+			for (const filePath of possiblePaths) {
+				if (fs.existsSync(filePath)) {
+					this.log('debug', `Found font file at: ${filePath}`)
+					try {
+						const content = fs.readFileSync(filePath)
+						this.log('debug', `Font file loaded successfully, size: ${content.length} bytes`)
+						return {
+							status: 200,
+							body: content,
+							headers: {
+								'Content-Type': 'font/ttf',
+								'Cache-Control': 'public, max-age=86400',
+							},
+						}
+					} catch (error) {
+						this.log('error', `Error reading font file: ${error.message}`)
+					}
+				} else {
+					this.log('debug', `Font file not found at: ${filePath}`)
+				}
+			}
+			
+			this.log('warn', `Font file not found in any location: ${filename}`)
+			return {
+				status: 404,
+				body: JSON.stringify({ error: `Font file ${filename} not found` }),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			}
+		}
+
+		const filePath = path.join(staticDir, filename)
+		
+		try {
+			if (fs.existsSync(filePath)) {
+				const content = fs.readFileSync(filePath)
+				
+				// For binary files, return content as-is. For text files, convert to string
+				const isBinaryFile = ['.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ttf', '.woff', '.woff2'].includes(path.extname(filename).toLowerCase())
+				
+				return {
+					status: 200,
+					body: isBinaryFile ? content : content.toString(),
+					headers: {
+						'Content-Type': contentType,
+						'Cache-Control': 'public, max-age=3600',
+					},
+				}
+			} else {
+				this.log('debug', `File not found at: ${filePath}`)
+				return {
+					status: 404,
+					body: JSON.stringify({ error: `File ${filename} not found` }),
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			}
+		} catch (error) {
+			this.log('error', `Error serving file ${filename}: ${error.message}`)
+			return {
+				status: 500,
+				body: JSON.stringify({ error: 'Internal server error' }),
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			}
+		}
+	}
+
+	getContentType(filename) {
+		const ext = path.extname(filename).toLowerCase()
+		const contentTypes = {
+			'.html': 'text/html',
+			'.js': 'application/javascript',
+			'.css': 'text/css',
+			'.ico': 'image/x-icon',
+			'.png': 'image/png',
+			'.jpg': 'image/jpeg',
+			'.jpeg': 'image/jpeg',
+			'.gif': 'image/gif',
+			'.svg': 'image/svg+xml',
+			'.ttf': 'font/ttf',
+			'.woff': 'font/woff',
+			'.woff2': 'font/woff2',
+		}
+		return contentTypes[ext] || 'application/octet-stream'
+	}
+
+	getAvailableIPs() {
+		const interfaces = os.networkInterfaces()
+		const ips = []
+		
+		for (const name of Object.keys(interfaces)) {
+			for (const iface of interfaces[name]) {
+				// Skip internal (localhost) and non-IPv4 addresses
+				if (iface.family === 'IPv4' && !iface.internal) {
+					ips.push(iface.address)
+				}
+			}
+		}
+		
+		return ips
+	}
+
+	getAccessLinks() {
+		const ips = this.getAvailableIPs()
+		const instanceName = this.label || 'countdown'
+		const links = []
+		
+		// Get Companion's port (default is 8000)
+		const port = process.env.COMPANION_PORT || 8000
+		
+		for (const ip of ips) {
+			links.push(`http://${ip}:${port}/instance/${instanceName}/`)
+		}
+		
+		return links
 	}
 
 	getConfigFields() {
 		return [
 			{
-				type: 'textinput',
-				id: 'port',
-				label: 'Web Server Port',
-				width: 6,
-				default: '8880',
+				type: 'static-text',
+				id: 'http_info',
+				label: 'HTTP Handler Information',
+				width: 12,
+				value: this.getAccessLinks().length > 0 
+					? `This module uses Companion's built-in HTTP handler. Access the web interface at:\n${this.getAccessLinks().join('\n')}`
+					: 'This module uses Companion\'s built-in HTTP handler. Access the web interface at: /instance/[INSTANCE_NAME]/',
 			},
 			{
 				type: 'checkbox',
@@ -89,8 +509,10 @@ export class CountdownTimer extends InstanceBase {
 				default: 'top-left',
 				choices: [
 					{ id: 'top-left', label: 'Top Left' },
+					{ id: 'top-middle', label: 'Top Middle' },
 					{ id: 'top-right', label: 'Top Right' },
 					{ id: 'bottom-left', label: 'Bottom Left' },
+					{ id: 'bottom-middle', label: 'Bottom Middle' },
 					{ id: 'bottom-right', label: 'Bottom Right' },
 				],
 			},
@@ -163,31 +585,8 @@ export class CountdownTimer extends InstanceBase {
 				],
 				isVisible: (options) => options.enable_speech === true,
 			},
-			{
-				type: 'dropdown',
-				id: 'speech_trigger',
-				label: 'Speech Trigger',
-				width: 12,
-				default: 'manual',
-				choices: [
-					{ id: 'manual', label: 'Manual (Click to Speak)' },
-					{ id: 'timer_start', label: 'When Timer Starts' },
-					{ id: 'timer_end', label: 'When Timer Ends' },
-					{ id: 'timer_warning', label: 'At Warning Times' },
-					{ id: 'continuous', label: 'Continuous (Repeat)' },
-				],
-				isVisible: (options) => options.enable_speech === true,
-			},
-			{
-				type: 'number',
-				id: 'speech_interval',
-				label: 'Continuous Speech Interval (seconds)',
-				width: 12,
-				default: 5,
-				min: 1,
-				max: 60,
-				isVisible: (options) => options.enable_speech === true && options.speech_trigger === 'continuous',
-			},
+
+
 			{
 				type: 'number',
 				id: 'speech_rate',
@@ -220,6 +619,48 @@ export class CountdownTimer extends InstanceBase {
 				max: 1,
 				step: 0.1,
 				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'dropdown',
+				id: 'speech_voice',
+				label: 'Speech Voice',
+				width: 12,
+				default: 'auto',
+				choices: [
+					{ id: 'auto', label: 'Auto-select (English)' },
+					{ id: 'samantha', label: 'Samantha (en-US)' },
+					{ id: 'aaron', label: 'Aaron (en-US)' },
+					{ id: 'albert', label: 'Albert (en-US)' },
+					{ id: 'alex', label: 'Alex (en-US)' },
+					{ id: 'arthur', label: 'Arthur (en-GB)' },
+					{ id: 'daniel', label: 'Daniel (en-GB)' },
+					{ id: 'fred', label: 'Fred (en-US)' },
+					{ id: 'gordon', label: 'Gordon (en-AU)' },
+					{ id: 'juni', label: 'Junior (en-US)' },
+					{ id: 'karen', label: 'Karen (en-AU)' },
+					{ id: 'kathy', label: 'Kathy (en-US)' },
+					{ id: 'martha', label: 'Martha (en-GB)' },
+					{ id: 'moira', label: 'Moira (en-IE)' },
+					{ id: 'nicky', label: 'Nicky (en-US)' },
+					{ id: 'ralph', label: 'Ralph (en-US)' },
+					{ id: 'rishi', label: 'Rishi (en-IN)' },
+					{ id: 'tessa', label: 'Tessa (en-ZA)' },
+					{ id: 'thomas', label: 'Thomas (fr-FR)' },
+					{ id: 'victoria', label: 'Victoria (en-GB)' },
+					{ id: 'google_us', label: 'Google US English (en-US)' },
+					{ id: 'google_uk_female', label: 'Google UK English Female (en-GB)' },
+					{ id: 'google_uk_male', label: 'Google UK English Male (en-GB)' },
+					{ id: 'custom', label: 'Custom (enter below)' },
+				],
+				isVisible: (options) => options.enable_speech === true,
+			},
+			{
+				type: 'textinput',
+				id: 'speech_voice_custom',
+				label: 'Custom Voice Name',
+				width: 12,
+				default: '',
+				isVisible: (options) => options.enable_speech === true && options.speech_voice === 'custom',
 			},
 		]
 	}
@@ -392,11 +833,18 @@ export class CountdownTimer extends InstanceBase {
 					},
 				],
 				callback: async (action) => {
-					// This will be handled by the web interface
-					this.io?.emit('speak_request', {
-						field: action.options.field,
-						custom_text: action.options.field === 'custom' ? await this.parseVariablesInString(action.options.custom_text) : null,
-					})
+					// Store speech request in instance state for the web interface to pick up
+					const field = action.options.field
+					const custom_text = action.options.field === 'custom' ? await this.parseVariablesInString(action.options.custom_text) : null
+					
+					// Store the speech request
+					this.pending_speech_request = {
+						field: field,
+						custom_text: custom_text,
+						timestamp: Date.now()
+					}
+					
+					this.log('debug', `Speech request stored: ${field}`)
 				},
 			},
 		})
@@ -634,17 +1082,6 @@ export class CountdownTimer extends InstanceBase {
 		this.update_variables()
 	}
 
-	init_webserver() {
-		if (this.config.port) {
-			const { server, io } = setupWebServer(this)
-			this.server = server
-			this.io = io
-			
-			// Initialize continuous speech after server is ready
-			this.updateContinuousSpeech()
-		}
-	}
-
 	getFullState() {
 		return {
 			remaining: this.timer_remaining,
@@ -652,6 +1089,8 @@ export class CountdownTimer extends InstanceBase {
 			top_aux: this.top_aux_text,
 			bottom_aux: this.bottom_aux_text,
 			middle_aux: this.middle_aux_text,
+			pending_speech_request: this.pending_speech_request,
+			current_time: new Date().toLocaleTimeString(), // Add current time to state
 			config: {
 				amber: this.config.amber_time,
 				red: this.config.red_time,
@@ -662,45 +1101,24 @@ export class CountdownTimer extends InstanceBase {
 				hide_timer: this.config.hide_timer,
 				enable_speech: this.config.enable_speech,
 				speech_field: this.config.speech_field,
-				speech_trigger: this.config.speech_trigger,
 				speech_rate: this.config.speech_rate,
 				speech_pitch: this.config.speech_pitch,
 				speech_volume: this.config.speech_volume,
-				speech_interval: this.config.speech_interval,
+				speech_voice: this.config.speech_voice,
+				speech_voice_custom: this.config.speech_voice_custom,
 			},
 		}
 	}
 
 	broadcastState() {
-		if (this.io) {
-			this.io.emit('state', this.getFullState())
-		}
+		// In HTTP handler mode, we don't need to broadcast state
+		// The web interface will poll for updates
+		this.log('debug', 'State updated - web interface will poll for changes')
 	}
 
-	triggerSpeech(event) {
-		if (!this.config.enable_speech || !this.io) return
-		
-		if (this.config.speech_trigger === event) {
-			this.io.emit('trigger_speech', { event })
-		}
-	}
 
-	updateContinuousSpeech() {
-		// Stop any existing continuous speech
-		if (this.speech_interval) {
-			clearInterval(this.speech_interval)
-			this.speech_interval = null
-		}
 
-		// Start continuous speech if enabled
-		if (this.config.enable_speech && this.config.speech_trigger === 'continuous' && this.io) {
-			const interval = (this.config.speech_interval || 5) * 1000 // Convert to milliseconds
-			this.speech_interval = setInterval(() => {
-				this.io.emit('trigger_speech', { event: 'continuous' })
-			}, interval)
-			this.log('debug', `Started continuous speech with ${interval/1000}s interval`)
-		}
-	}
+
 
 	update_variables() {
 		const seconds = Math.abs(this.timer_remaining)
@@ -741,12 +1159,11 @@ export class CountdownTimer extends InstanceBase {
 	start_timer() {
 		this.log('debug', `start_timer. state: ${this.timer_state}, interval: ${this.timer_interval}`)
 		if (this.timer_state !== 'running') {
-			this.timer_state = 'running'
-			this.timer_interval = setInterval(() => this.tick(), 1000)
-			this.log('debug', `start_timer: new interval ${this.timer_interval}`)
-			this.broadcastState()
-			this.checkFeedbacks('state_color')
-			this.triggerSpeech('timer_start')
+					this.timer_state = 'running'
+		this.timer_interval = setInterval(() => this.tick(), 1000)
+		this.log('debug', `start_timer: new interval ${this.timer_interval}`)
+		this.broadcastState()
+		this.checkFeedbacks('state_color')
 		}
 	}
 
@@ -780,18 +1197,7 @@ export class CountdownTimer extends InstanceBase {
 
 	tick() {
 		if (this.timer_state === 'running') {
-			const previousRemaining = this.timer_remaining
 			this.timer_remaining--
-
-			// Check for speech triggers
-			if (this.timer_remaining <= 0 && previousRemaining > 0) {
-				this.triggerSpeech('timer_end')
-			} else if (this.config.enable_speech && this.config.speech_trigger === 'timer_warning') {
-				if ((this.config.red_time && this.timer_remaining === this.config.red_time) ||
-					(this.config.amber_time && this.timer_remaining === this.config.amber_time)) {
-					this.triggerSpeech('timer_warning')
-				}
-			}
 
 			this.update_variables()
 			this.checkFeedbacks('state_color')
