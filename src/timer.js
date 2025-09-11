@@ -81,6 +81,7 @@ export class CountdownTimer extends InstanceBase {
 				}
 			}
 
+
 			// Voices endpoint - returns available speech voices
 			if (endpoint === 'voices') {
 				// This will be handled by the web interface
@@ -469,19 +470,42 @@ export class CountdownTimer extends InstanceBase {
 		return ips
 	}
 
+	getCurrentPort() {
+		// Just use the default port 8000
+		return 8000
+	}
+
 	getAccessLinks() {
 		const ips = this.getAvailableIPs()
 		const instanceName = this.label || 'countdown'
 		const links = []
-		
-		// Get Companion's port (default is 8000)
-		const port = process.env.COMPANION_PORT || 8000
+		const port = this.getCurrentPort()
 		
 		for (const ip of ips) {
 			links.push(`http://${ip}:${port}/instance/${instanceName}/`)
 		}
 		
 		return links
+	}
+
+	getHttpInfoText() {
+		const links = this.getAccessLinks()
+		const instanceName = this.label || 'countdown'
+		
+		let text = `This module uses Companion's built-in HTTP handler.\n\n`
+		
+		if (links.length > 0) {
+			text += `Access the web display at:\n`
+			links.forEach(link => {
+				text += `${link}\n`
+			})
+		} else {
+			text += `Access via: /instance/${instanceName}/\n`
+		}
+		
+		text += `\nIf Companion is not using the default port 8000, change the port number in the URL above to match your Companion configuration.`
+		
+		return text
 	}
 
 	getConfigFields() {
@@ -491,9 +515,7 @@ export class CountdownTimer extends InstanceBase {
 				id: 'http_info',
 				label: 'HTTP Handler Information',
 				width: 12,
-				value: this.getAccessLinks().length > 0 
-					? `This module uses Companion's built-in HTTP handler. Access the web interface at:\n${this.getAccessLinks().join('\n')}`
-					: 'This module uses Companion\'s built-in HTTP handler. Access the web interface at: /instance/[INSTANCE_NAME]/',
+				value: this.getHttpInfoText(),
 			},
 			{
 				type: 'checkbox',
@@ -1063,6 +1085,7 @@ export class CountdownTimer extends InstanceBase {
 			],
 			feedbacks: [],
 		}
+
 
 
 		this.setPresetDefinitions(presets)

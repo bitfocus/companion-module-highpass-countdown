@@ -160,6 +160,7 @@ body {
 	opacity: 1;
 }
 
+
 @keyframes pulse {
 	0% { transform: scale(1); }
 	50% { transform: scale(1.05); }
@@ -180,4 +181,4 @@ body {
 /* Hide speech controls when speech is disabled */
 .speech-disabled #speech-controls {
 	display: none;
-} 
+}

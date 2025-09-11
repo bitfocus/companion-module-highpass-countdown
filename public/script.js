@@ -103,6 +103,7 @@ async function pollState() {
 	}
 }
 
+
 // Start polling
 function startPolling() {
 	// Initial poll
@@ -119,6 +120,7 @@ function stopPolling() {
 		pollInterval = null
 	}
 }
+
 
 // Speech synthesis function
 function speak(text) {
@@ -300,17 +302,25 @@ function updateContinuousSpeech(config) {
 function updateDisplay(state) {
 	currentState = state
 	speechConfig = state.config
+	
+	
+	// Debug: Log configuration values (uncomment for debugging)
+	// console.log('Received config:', {
+	// 	timer_fontsize: state.config.timer_fontsize,
+	// 	aux_fontsize: state.config.aux_fontsize,
+	// 	hide_timer: state.config.hide_timer
+	// })
 
 	// Handle hide timer functionality
 	if (state.config.hide_timer) {
 		document.body.classList.add('timer-hidden')
 		timerEl.style.display = 'none'
-		middleAuxEl.style.fontSize = state.config.timer_fontsize + 'vw'
+		middleAuxEl.style.setProperty('font-size', state.config.timer_fontsize + 'vw', 'important')
 		middleAuxEl.style.fontWeight = 'bold'
 	} else {
 		document.body.classList.remove('timer-hidden')
 		timerEl.style.display = 'block'
-		middleAuxEl.style.fontSize = state.config.aux_fontsize + 'vw'
+		middleAuxEl.style.setProperty('font-size', state.config.aux_fontsize + 'vw', 'important')
 		middleAuxEl.style.fontWeight = 'normal'
 		
 		// Main timer display
@@ -338,15 +348,17 @@ function updateDisplay(state) {
 		}
 
 		// Apply timer font size
-		timerEl.style.fontSize = state.config.timer_fontsize + 'vw'
+		timerEl.style.setProperty('font-size', state.config.timer_fontsize + 'vw', 'important')
+		// console.log('Applied timer font size:', state.config.timer_fontsize + 'vw')
 	}
 
 	// Apply aux font sizes
-	topAuxEl.style.fontSize = state.config.aux_fontsize + 'vw'
-	bottomAuxEl.style.fontSize = state.config.aux_fontsize + 'vw'
+	topAuxEl.style.setProperty('font-size', state.config.aux_fontsize + 'vw', 'important')
+	bottomAuxEl.style.setProperty('font-size', state.config.aux_fontsize + 'vw', 'important')
 	if (!state.config.hide_timer) {
-		middleAuxEl.style.fontSize = state.config.aux_fontsize + 'vw'
+		middleAuxEl.style.setProperty('font-size', state.config.aux_fontsize + 'vw', 'important')
 	}
+	// console.log('Applied aux font sizes:', state.config.aux_fontsize + 'vw')
 
 	// Aux text content - convert \n to HTML line breaks
 	topAuxEl.innerHTML = convertNewlinesToHTML(state.top_aux || '')
@@ -374,6 +386,7 @@ function updateDisplay(state) {
 		speakButton.classList.remove('not-initialized')
 		initSpeechButton.style.display = 'none'
 	}
+
 
 	// Handle continuous speech
 	updateContinuousSpeech(state.config)
@@ -424,6 +437,7 @@ speakButton.addEventListener('click', () => {
 initSpeechButton.addEventListener('click', () => {
 	initializeSpeechOnInteraction()
 })
+
 
 // Note: Internal time is now updated via server polling every 500ms
 // This ensures consistency between the corner display and any aux fields

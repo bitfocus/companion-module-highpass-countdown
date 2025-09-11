@@ -1,6 +1,6 @@
 {
 	"name": "highpass-countdown",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"license": "MIT",
 	"type": "module",
 	"main": "src/index.js",
@@ -22,13 +22,14 @@
 		"url": "git+https://github.com/bitfocus/companion-module-highpass-countdown.git"
 	},
 	"dependencies": {
-		"@companion-module/base": "^1.12.0",
+		"@companion-module/base": "1.12.1",
 		"companion-module-utils": "^0.4.0"
 	},
 	"devDependencies": {
+		"@companion-module/tools": "2.3.0",
 		"eslint": "^8.47.0",
 		"prettier": "^3.0.2",
-		"@companion-module/tools": "2.3.0"
+		"zx": "^8.8.1"
 	},
 	"prettier": {
 		"semi": false,
@@ -39,5 +40,5 @@
 	"companion": {
 		"buildDir": "dist"
 	},
-	"packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+	"packageManager": "yarn@4.9.4"
 }
