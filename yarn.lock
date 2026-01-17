@@ -1254,7 +1254,6 @@ __metadata:
     companion-module-utils: "npm:^0.4.0"
     eslint: "npm:^9.0.0"
     prettier: "npm:^3.0.2"
-    zx: "npm:^8.8.5"
   languageName: unknown
   linkType: soft
 
@@ -2245,15 +2244,6 @@ __metadata:
   linkType: hard
 
 "zx@npm:^8.3.2":
-  version: 8.8.1
-  resolution: "zx@npm:8.8.1"
-  bin:
-    zx: build/cli.js
-  checksum: 10c0/41a861b4d151c70a9c3fd358b96e8c6ec954ccb22122b4cdea42d0f77cc66fd0a398ebac26b0f24a22d38ab0a1b8e5e0b3efa5232a26a9d37e5fbbf4d530c9ea
-  languageName: node
-  linkType: hard
-
-"zx@npm:^8.8.5":
   version: 8.8.5
   resolution: "zx@npm:8.8.5"
   bin:
