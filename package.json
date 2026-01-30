@@ -26,7 +26,7 @@
 		"companion-module-utils": "^0.4.0"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "2.3.0",
+		"@companion-module/tools": "^2.6.1",
 		"eslint": "^9.0.0",
 		"prettier": "^3.0.2",
 		"zx": "^8.8.5"
